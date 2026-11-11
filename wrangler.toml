@@ -1,3 +1,4 @@
+
 name = "mulheres-habilitadas"
 compatibility_date = "2026-11-11"
 pages_build_output_dir = "./public"
@@ -5,7 +6,7 @@ pages_build_output_dir = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "mulheres-habilitadas-db"
-database_id = "PREENCHER_COM_O_ID_DO_D1"
+database_id = "08dcc6c6-3ec6-4a65-beb2-d287ef6431d1"
 
 [[r2_buckets]]
 binding = "FILES"

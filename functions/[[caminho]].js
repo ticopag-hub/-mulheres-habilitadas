@@ -1,17 +1,20 @@
 
-const json = (data, status = 200) =>
+const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store'
+      'cache-control': 'no-store',
+      ...headers
     }
   });
 
 const enc = new TextEncoder();
+const uid = () => crypto.randomUUID();
+const ROLES = ['admin', 'supervisor', 'instructor'];
 
-const b64 = b =>
-  btoa(String.fromCharCode(...new Uint8Array(b)))
+const b64 = bytes =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
@@ -25,18 +28,12 @@ async function hashPass(pass, salt) {
     ['deriveBits']
   );
 
-  return b64(
-    await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: enc.encode(salt),
-        iterations: 210000,
-        hash: 'SHA-256'
-      },
-      key,
-      256
-    )
-  );
+  return b64(await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    salt: enc.encode(salt),
+    iterations: 210000,
+    hash: 'SHA-256'
+  }, key, 256));
 }
 
 async function sign(value, secret) {
@@ -48,9 +45,11 @@ async function sign(value, secret) {
     ['sign']
   );
 
-  return b64(
-    await crypto.subtle.sign('HMAC', key, enc.encode(value))
-  );
+  return b64(await crypto.subtle.sign(
+    'HMAC',
+    key,
+    enc.encode(value)
+  ));
 }
 
 function cookieVal(req, name) {
@@ -59,6 +58,10 @@ function cookieVal(req, name) {
     .map(x => x.trim())
     .find(x => x.startsWith(name + '='))
     ?.slice(name.length + 1);
+}
+
+function cookie(value, maxAge = 86400) {
+  return `mh_session=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
 async function session(req, env) {
@@ -82,36 +85,20 @@ async function session(req, env) {
     return await env.DB.prepare(
       'SELECT id,name,username,role FROM users WHERE id=? AND active=1'
     ).bind(id).first();
-
   } catch {
     return null;
   }
 }
 
-function cookie(value, maxAge = 86400) {
-  return `mh_session=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
-}
-
-const uid = () => crypto.randomUUID();
-
 async function body(req) {
-  return req.headers.get('content-type')?.includes('application/json')
-    ? req.json()
-    : {};
+  if (!req.headers.get('content-type')?.includes('application/json')) {
+    return {};
+  }
+  return req.json();
 }
 
 function allowed(user, roles) {
-  return user && roles.includes(user.role);
-}
-
-async function need(req, env, roles = ['admin', 'supervisor', 'instructor']) {
-  const u = await session(req, env);
-
-  if (!allowed(u, roles)) {
-    throw new Error('Acesso não autorizado.');
-  }
-
-  return u;
+  return !!user && roles.includes(user.role);
 }
 
 function dateBR(iso) {
@@ -122,21 +109,40 @@ function dateBR(iso) {
     : '';
 }
 
+function cleanText(value) {
+  return String(value || '').trim();
+}
+
+function errorMessage(error) {
+  const message = error?.message || '';
+
+  if (message.includes('UNIQUE constraint failed')) {
+    return 'Esse usuário ou placa já está cadastrado.';
+  }
+
+  if (message.includes('FOREIGN KEY constraint failed')) {
+    return 'Não foi possível concluir: existem registros relacionados.';
+  }
+
+  return message || 'Erro interno.';
+}
+
 export async function onRequest({ request, env }) {
   try {
-    const path = new URL(request.url).pathname.replace(/^\/api\/?/, '');
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/^\/api\/?/, '');
     const method = request.method;
 
-    // VERIFICAÇÃO DA CONFIGURAÇÃO INICIAL
+    // CONFIGURAÇÃO INICIAL
     if (path === 'setup-status' && method === 'GET') {
-      const r = await env.DB.prepare(
+      const result = await env.DB.prepare(
         "SELECT COUNT(*) n FROM users WHERE role='admin'"
       ).first();
 
-      return json({ setupRequired: !r.n });
+      return json({ setupRequired: !result.n });
     }
 
-    // CRIAÇÃO DO PRIMEIRO ADMINISTRADOR
+    // CRIAR PRIMEIRO ADMINISTRADOR
     if (path === 'setup' && method === 'POST') {
       const d = await body(request);
 
@@ -144,17 +150,19 @@ export async function onRequest({ request, env }) {
         return json({ error: 'Chave de configuração inválida.' }, 403);
       }
 
-      const n = await env.DB.prepare(
+      const count = await env.DB.prepare(
         "SELECT COUNT(*) n FROM users WHERE role='admin'"
       ).first();
 
-      if (n.n) {
-        return json({
-          error: 'A configuração inicial já foi concluída.'
-        }, 409);
+      if (count.n) {
+        return json({ error: 'A configuração inicial já foi concluída.' }, 409);
       }
 
-      if (!d.name || !d.username || !d.password || d.password.length < 10) {
+      const name = cleanText(d.name);
+      const username = cleanText(d.username).toLowerCase();
+      const password = String(d.password || '');
+
+      if (!name || !username || password.length < 10) {
         return json({
           error: 'Informe nome, usuário e senha com pelo menos 10 caracteres.'
         }, 400);
@@ -162,17 +170,14 @@ export async function onRequest({ request, env }) {
 
       const id = uid();
       const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
-      const hash = await hashPass(d.password, salt);
+      const hash = await hashPass(password, salt);
 
       await env.DB.prepare(
-        'INSERT INTO users(id,name,username,role,salt,password_hash,active,created_at) VALUES(?,?,?,?,?,?,1,?)'
+        `INSERT INTO users
+        (id,name,username,role,salt,password_hash,active,created_at)
+        VALUES(?,?,?,?,?,?,1,?)`
       ).bind(
-        id,
-        d.name,
-        d.username.toLowerCase(),
-        'admin',
-        salt,
-        hash,
+        id, name, username, 'admin', salt, hash,
         new Date().toISOString()
       ).run();
 
@@ -182,70 +187,74 @@ export async function onRequest({ request, env }) {
     // LOGIN
     if (path === 'login' && method === 'POST') {
       const d = await body(request);
+      const username = cleanText(d.username).toLowerCase();
 
-      const u = await env.DB.prepare(
+      const user = await env.DB.prepare(
         'SELECT * FROM users WHERE username=? AND active=1'
-      ).bind(String(d.username || '').toLowerCase()).first();
+      ).bind(username).first();
 
       if (
-        !u ||
-        await hashPass(String(d.password || ''), u.salt) !== u.password_hash
+        !user ||
+        await hashPass(String(d.password || ''), user.salt) !== user.password_hash
       ) {
-        return json({
-          error: 'Usuário ou senha incorretos.'
-        }, 401);
+        return json({ error: 'Usuário ou senha incorretos.' }, 401);
       }
 
       if (!env.SESSION_SECRET) {
-        return json({
-          error: 'Configuração de sessão não encontrada.'
-        }, 500);
+        return json({ error: 'Configuração de sessão não encontrada.' }, 500);
       }
 
       const exp = Date.now() + 86400000;
-      const value = u.id + '.' + exp;
+      const value = user.id + '.' + exp;
       const sig = await sign(value, env.SESSION_SECRET);
 
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: {
-          'content-type': 'application/json',
-          'cache-control': 'no-store',
-          'set-cookie': cookie(value + '.' + sig)
-        }
-      });
+      return json(
+        { ok: true },
+        200,
+        { 'set-cookie': cookie(value + '.' + sig) }
+      );
     }
 
-    // LOGOUT
+    // SAIR
     if (path === 'logout' && method === 'POST') {
-      return new Response('{"ok":true}', {
-        headers: {
-          'content-type': 'application/json',
-          'set-cookie': cookie('', 0)
+      return json(
+        { ok: true },
+        200,
+        { 'set-cookie': cookie('', 0) }
+      );
+    }
+
+    // USUÁRIO ATUAL
+    if (path === 'me' && method === 'GET') {
+      const user = await session(request, env);
+
+      if (!user) {
+        return json({ error: 'Não autenticado.' }, 401);
+      }
+
+      return json({
+        user: {
+          ...user,
+          roleLabel: {
+            admin: 'Administrador',
+            supervisor: 'Professor Sênior',
+            instructor: 'Professor'
+          }[user.role]
         }
       });
     }
 
-    // USUÁRIO LOGADO
-    if (path === 'me') {
-      const u = await session(request, env);
+    // TODAS AS OUTRAS ROTAS EXIGEM LOGIN
+    const user = await session(request, env);
 
-      return u
-        ? json({
-            user: {
-              ...u,
-              roleLabel: {
-                admin: 'Administrador',
-                supervisor: 'Supervisor',
-                instructor: 'Instrutor'
-              }[u.role]
-            }
-          })
-        : json({ error: 'Não autenticado' }, 401);
+    if (!user) {
+      return json({ error: 'Não autenticado.' }, 401);
     }
 
-    const u = await need(request, env);
+    const isManager = allowed(user, ['admin', 'supervisor']);
+    const isAdmin = user.role === 'admin';
 
-    // PAINEL PRINCIPAL
+    // PAINEL PRINCIPAL - TODOS PODEM CONSULTAR
     if (path === 'dashboard' && method === 'GET') {
       const [cars, checks, incidents, recent] = await Promise.all([
         env.DB.prepare(
@@ -274,10 +283,10 @@ export async function onRequest({ request, env }) {
             UNION ALL
 
             SELECT
-              'Ocorrência',
-              c.model || ' · ' || c.plate,
-              i.created_at,
-              us.name
+              'Ocorrência' kind,
+              c.model || ' · ' || c.plate car,
+              i.created_at date,
+              us.name author
             FROM incidents i
             JOIN cars c ON c.id=i.car_id
             JOIN users us ON us.id=i.user_id
@@ -298,18 +307,23 @@ export async function onRequest({ request, env }) {
       });
     }
 
-    // REGISTRO DE VISTORIA
+    // CHECKLIST - TODOS PODEM FAZER
     if (path === 'checks' && method === 'POST') {
       const d = await body(request);
+      const km = Number(d.km);
 
-      if (
-        !d.car_id ||
-        !Number.isFinite(d.km) ||
-        d.km < 0
-      ) {
+      if (!d.car_id || !Number.isFinite(km) || km < 0) {
         return json({
           error: 'Veículo e quilometragem válidos são obrigatórios.'
         }, 400);
+      }
+
+      const car = await env.DB.prepare(
+        'SELECT id FROM cars WHERE id=? AND active=1'
+      ).bind(d.car_id).first();
+
+      if (!car) {
+        return json({ error: 'Veículo não encontrado ou inativo.' }, 400);
       }
 
       const id = uid();
@@ -317,69 +331,78 @@ export async function onRequest({ request, env }) {
 
       await env.DB.batch([
         env.DB.prepare(
-          'INSERT INTO checks(id,car_id,user_id,km,tires,oil,fuel,clean,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)'
+          `INSERT INTO checks
+          (id,car_id,user_id,km,tires,oil,fuel,clean,notes,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`
         ).bind(
           id,
           d.car_id,
-          u.id,
-          d.km,
+          user.id,
+          km,
           +!!d.tires,
           +!!d.oil,
           +!!d.fuel,
           +!!d.clean,
-          d.notes || '',
+          cleanText(d.notes),
           now
         ),
 
         env.DB.prepare(
           'UPDATE cars SET km=? WHERE id=?'
-        ).bind(d.km, d.car_id)
+        ).bind(km, d.car_id)
       ]);
 
       return json({ ok: true });
     }
 
-    // REGISTRO DE OCORRÊNCIA SEM FOTOS OU DOCUMENTOS
+    // OCORRÊNCIAS - ADMINISTRADOR E PROFESSOR SÊNIOR
     if (path === 'incidents' && method === 'POST') {
+      if (!isManager) {
+        return json({ error: 'Sem permissão para registrar ocorrências.' }, 403);
+      }
+
       const d = await body(request);
 
-      if (!d.car_id || !d.description || !d.severity) {
+      if (!d.car_id || !cleanText(d.description) || !cleanText(d.severity)) {
         return json({
           error: 'Preencha veículo, gravidade e descrição.'
         }, 400);
       }
 
-      const id = uid();
-      const now = new Date().toISOString();
+      const car = await env.DB.prepare(
+        'SELECT id FROM cars WHERE id=? AND active=1'
+      ).bind(d.car_id).first();
+
+      if (!car) {
+        return json({ error: 'Veículo não encontrado ou inativo.' }, 400);
+      }
 
       await env.DB.prepare(
-        'INSERT INTO incidents(id,car_id,user_id,severity,description,created_at) VALUES(?,?,?,?,?,?)'
+        `INSERT INTO incidents
+        (id,car_id,user_id,severity,description,created_at)
+        VALUES(?,?,?,?,?,?)`
       ).bind(
-        id,
+        uid(),
         d.car_id,
-        u.id,
-        d.severity,
-        d.description,
-        now
+        user.id,
+        cleanText(d.severity),
+        cleanText(d.description),
+        new Date().toISOString()
       ).run();
 
       return json({ ok: true });
     }
 
-    // HISTÓRICO
+    // HISTÓRICO - TODOS PODEM CONSULTAR
     if (path === 'history' && method === 'GET') {
-      const url = new URL(request.url);
-
       const type = url.searchParams.get('type') || 'all';
       const car = url.searchParams.get('car');
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
-
       const rows = [];
 
-      // VISTORIAS
       if (type !== 'incident') {
-        let q = `
+        let query = `
           SELECT
             ck.id,
             'Vistoria' kind,
@@ -394,31 +417,27 @@ export async function onRequest({ request, env }) {
           JOIN users u ON u.id=ck.user_id
           WHERE 1=1
         `;
-
-        const p = [];
+        const params = [];
 
         if (car) {
-          q += ' AND ck.car_id=?';
-          p.push(car);
+          query += ' AND ck.car_id=?';
+          params.push(car);
         }
-
         if (from) {
-          q += ' AND date(ck.created_at)>=date(?)';
-          p.push(from);
+          query += ' AND date(ck.created_at)>=date(?)';
+          params.push(from);
         }
-
         if (to) {
-          q += ' AND date(ck.created_at)<=date(?)';
-          p.push(to);
+          query += ' AND date(ck.created_at)<=date(?)';
+          params.push(to);
         }
 
-        const x = await env.DB.prepare(q).bind(...p).all();
-        rows.push(...x.results);
+        const result = await env.DB.prepare(query).bind(...params).all();
+        rows.push(...result.results);
       }
 
-      // OCORRÊNCIAS
       if (type !== 'check') {
-        let q = `
+        let query = `
           SELECT
             i.id,
             'Ocorrência' kind,
@@ -433,101 +452,145 @@ export async function onRequest({ request, env }) {
           JOIN users u ON u.id=i.user_id
           WHERE 1=1
         `;
-
-        const p = [];
+        const params = [];
 
         if (car) {
-          q += ' AND i.car_id=?';
-          p.push(car);
+          query += ' AND i.car_id=?';
+          params.push(car);
         }
-
         if (from) {
-          q += ' AND date(i.created_at)>=date(?)';
-          p.push(from);
+          query += ' AND date(i.created_at)>=date(?)';
+          params.push(from);
         }
-
         if (to) {
-          q += ' AND date(i.created_at)<=date(?)';
-          p.push(to);
+          query += ' AND date(i.created_at)<=date(?)';
+          params.push(to);
         }
 
-        const x = await env.DB.prepare(q).bind(...p).all();
-        rows.push(...x.results);
+        const result = await env.DB.prepare(query).bind(...params).all();
+        rows.push(...result.results);
       }
 
       rows.sort((a, b) => b.date.localeCompare(a.date));
 
-      for (const r of rows) {
-        r.date = dateBR(r.date);
-        r.files = [];
+      for (const row of rows) {
+        row.date = dateBR(row.date);
+        row.files = [];
       }
 
       return json({ rows });
     }
 
-    // CADASTRO DE VEÍCULOS
+    // CADASTRAR CARRO - ADMINISTRADOR E PROFESSOR SÊNIOR
     if (path === 'cars' && method === 'POST') {
-      if (!allowed(u, ['admin', 'supervisor'])) {
+      if (!isManager) {
         return json({ error: 'Sem permissão.' }, 403);
       }
 
       const d = await body(request);
+      const model = cleanText(d.model);
+      const plate = cleanText(d.plate).toUpperCase();
+      const km = Number(d.km) || 0;
 
-      if (!d.model || !d.plate) {
-        return json({
-          error: 'Modelo e placa são obrigatórios.'
-        }, 400);
+      if (!model || !plate || !Number.isFinite(km) || km < 0) {
+        return json({ error: 'Informe modelo, placa e quilometragem válida.' }, 400);
       }
 
       await env.DB.prepare(
-        'INSERT INTO cars(id,model,plate,km,active,created_at) VALUES(?,?,?,?,1,?)'
+        `INSERT INTO cars(id,model,plate,km,active,created_at)
+         VALUES(?,?,?,?,1,?)`
       ).bind(
-        uid(),
-        d.model,
-        d.plate.toUpperCase(),
-        Number(d.km) || 0,
-        new Date().toISOString()
+        uid(), model, plate, km, new Date().toISOString()
       ).run();
 
       return json({ ok: true });
     }
 
-    // CADASTRO DE USUÁRIOS
-    if (path === 'users' && method === 'POST') {
-      if (!allowed(u, ['admin'])) {
-        return json({
-          error: 'Somente administrador pode criar usuários.'
-        }, 403);
+    // EDITAR OU EXCLUIR CARRO
+    const carMatch = path.match(/^cars\/([^/]+)$/);
+
+    if (carMatch && ['PATCH', 'DELETE'].includes(method)) {
+      if (!isManager) {
+        return json({ error: 'Sem permissão.' }, 403);
+      }
+
+      const id = carMatch[1];
+
+      const existing = await env.DB.prepare(
+        'SELECT id FROM cars WHERE id=?'
+      ).bind(id).first();
+
+      if (!existing) {
+        return json({ error: 'Carro não encontrado.' }, 404);
+      }
+
+      if (method === 'DELETE') {
+        await env.DB.prepare(
+          'UPDATE cars SET active=0 WHERE id=?'
+        ).bind(id).run();
+
+        return json({ ok: true });
       }
 
       const d = await body(request);
+      const model = cleanText(d.model);
+      const plate = cleanText(d.plate).toUpperCase();
+      const km = Number(d.km);
+
+      if (!model || !plate || !Number.isFinite(km) || km < 0) {
+        return json({ error: 'Informe modelo, placa e quilometragem válida.' }, 400);
+      }
+
+      await env.DB.prepare(
+        'UPDATE cars SET model=?,plate=?,km=? WHERE id=?'
+      ).bind(model, plate, km, id).run();
+
+      return json({ ok: true });
+    }
+
+    // CADASTRAR USUÁRIO
+    if (path === 'users' && method === 'POST') {
+      if (!isManager) {
+        return json({ error: 'Sem permissão.' }, 403);
+      }
+
+      const d = await body(request);
+      const name = cleanText(d.name);
+      const username = cleanText(d.username).toLowerCase();
+      const password = String(d.password || '');
+      const role = cleanText(d.role);
 
       if (
-        !d.name ||
-        !d.username ||
-        !d.password ||
-        d.password.length < 10 ||
-        !['admin', 'supervisor', 'instructor'].includes(d.role)
+        !name ||
+        !username ||
+        password.length < 10 ||
+        !ROLES.includes(role)
       ) {
         return json({
-          error: 'Dados inválidos. Senha deve ter ao menos 10 caracteres.'
+          error: 'Informe nome, usuário, perfil e senha com pelo menos 10 caracteres.'
         }, 400);
       }
 
-      const id = uid();
-      const salt = b64(
-        crypto.getRandomValues(new Uint8Array(16))
-      );
+      // Professor Sênior não pode criar outro administrador.
+      if (!isAdmin && role === 'admin') {
+        return json({
+          error: 'Somente o Administrador pode criar outro Administrador.'
+        }, 403);
+      }
 
-      const hash = await hashPass(d.password, salt);
+      const id = uid();
+      const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+      const hash = await hashPass(password, salt);
 
       await env.DB.prepare(
-        'INSERT INTO users(id,name,username,role,salt,password_hash,active,created_at) VALUES(?,?,?,?,?,?,1,?)'
+        `INSERT INTO users
+        (id,name,username,role,salt,password_hash,active,created_at)
+        VALUES(?,?,?,?,?,?,1,?)`
       ).bind(
         id,
-        d.name,
-        d.username.toLowerCase(),
-        d.role,
+        name,
+        username,
+        role,
         salt,
         hash,
         new Date().toISOString()
@@ -536,9 +599,133 @@ export async function onRequest({ request, env }) {
       return json({ ok: true });
     }
 
-    // GERENCIAMENTO
+    // EDITAR OU EXCLUIR USUÁRIO
+    const userMatch = path.match(/^users\/([^/]+)$/);
+
+    if (userMatch && ['PATCH', 'DELETE'].includes(method)) {
+      if (!isManager) {
+        return json({ error: 'Sem permissão.' }, 403);
+      }
+
+      const id = userMatch[1];
+
+      const target = await env.DB.prepare(
+        'SELECT id,name,username,role,active FROM users WHERE id=?'
+      ).bind(id).first();
+
+      if (!target) {
+        return json({ error: 'Usuário não encontrado.' }, 404);
+      }
+
+      // O Professor Sênior não pode alterar ou excluir administradores.
+      if (!isAdmin && target.role === 'admin') {
+        return json({
+          error: 'Somente o Administrador pode alterar a conta de um Administrador.'
+        }, 403);
+      }
+
+      // Não permitir desativar a própria conta.
+      if (method === 'DELETE') {
+        if (id === user.id) {
+          return json({
+            error: 'Você não pode excluir seu próprio usuário enquanto estiver conectado.'
+          }, 400);
+        }
+
+        if (target.role === 'admin') {
+          const admins = await env.DB.prepare(
+            "SELECT COUNT(*) n FROM users WHERE role='admin' AND active=1"
+          ).first();
+
+          if (admins.n <= 1) {
+            return json({
+              error: 'Não é possível desativar o último Administrador.'
+            }, 400);
+          }
+        }
+
+        await env.DB.prepare(
+          'UPDATE users SET active=0 WHERE id=?'
+        ).bind(id).run();
+
+        return json({ ok: true });
+      }
+
+      const d = await body(request);
+      const name = cleanText(d.name);
+      const username = cleanText(d.username).toLowerCase();
+      const role = cleanText(d.role);
+
+      if (!name || !username || !ROLES.includes(role)) {
+        return json({
+          error: 'Informe nome, usuário e perfil válidos.'
+        }, 400);
+      }
+
+      if (!isAdmin && role === 'admin') {
+        return json({
+          error: 'Somente o Administrador pode definir o perfil Administrador.'
+        }, 403);
+      }
+
+      if (id === user.id && role !== user.role) {
+        return json({
+          error: 'Não é possível alterar o próprio perfil.'
+        }, 400);
+      }
+
+      await env.DB.prepare(
+        'UPDATE users SET name=?,username=?,role=? WHERE id=?'
+      ).bind(name, username, role, id).run();
+
+      return json({ ok: true });
+    }
+
+    // REDEFINIR SENHA DE USUÁRIO
+    const passwordMatch = path.match(/^users\/([^/]+)\/password$/);
+
+    if (passwordMatch && method === 'POST') {
+      if (!isManager) {
+        return json({ error: 'Sem permissão.' }, 403);
+      }
+
+      const id = passwordMatch[1];
+      const target = await env.DB.prepare(
+        'SELECT id,role FROM users WHERE id=? AND active=1'
+      ).bind(id).first();
+
+      if (!target) {
+        return json({ error: 'Usuário não encontrado ou inativo.' }, 404);
+      }
+
+      if (!isAdmin && target.role === 'admin') {
+        return json({
+          error: 'Somente o Administrador pode alterar a senha de um Administrador.'
+        }, 403);
+      }
+
+      const d = await body(request);
+      const password = String(d.password || '');
+
+      if (password.length < 10) {
+        return json({
+          error: 'A nova senha deve ter pelo menos 10 caracteres.'
+        }, 400);
+      }
+
+      const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+      const hash = await hashPass(password, salt);
+
+      await env.DB.prepare(
+        'UPDATE users SET salt=?,password_hash=? WHERE id=?'
+      ).bind(salt, hash, id).run();
+
+      return json({ ok: true });
+    }
+
+    // GERENCIAMENTO - ADMINISTRADOR E PROFESSOR SÊNIOR
     if (path === 'management' && method === 'GET') {
-      if (!allowed(u, ['admin', 'supervisor'])) {
+      if (!isManager) {
         return json({ error: 'Sem permissão.' }, 403);
       }
 
@@ -558,81 +745,15 @@ export async function onRequest({ request, env }) {
       });
     }
 
-    // RELATÓRIOS MENSAIS
+    // RELATÓRIOS - SOMENTE ADMINISTRADOR
     if (path === 'reports' && method === 'GET') {
-      if (!allowed(u, ['admin', 'supervisor'])) {
-        return json({ error: 'Sem permissão.' }, 403);
-      }
-
-      const m = new URL(request.url).searchParams.get('month');
-
-      if (!/^\d{4}-\d{2}$/.test(m || '')) {
+      if (!isAdmin) {
         return json({
-          error: 'Informe mês no formato AAAA-MM.'
-        }, 400);
+          error: 'Somente o Administrador pode emitir relatórios.'
+        }, 403);
       }
 
-      const year = Number(m.slice(0, 4));
-      const month = Number(m.slice(5, 7));
+      const monthValue = url.searchParams.get('month');
 
-      if (month < 1 || month > 12) {
-        return json({ error: 'Mês inválido.' }, 400);
-      }
-
-      const start = m + '-01';
-      const end = new Date(Date.UTC(year, month, 1))
-        .toISOString()
-        .slice(0, 10);
-
-      const [checks, incidents] = await Promise.all([
-        env.DB.prepare(`
-          SELECT
-            ck.*,
-            c.model || ' · ' || c.plate car,
-            u.name author
-          FROM checks ck
-          JOIN cars c ON c.id=ck.car_id
-          JOIN users u ON u.id=ck.user_id
-          WHERE date(ck.created_at)>=date(?)
-            AND date(ck.created_at)<date(?)
-          ORDER BY ck.created_at
-        `).bind(start, end).all(),
-
-        env.DB.prepare(`
-          SELECT
-            i.*,
-            c.model || ' · ' || c.plate car,
-            u.name author
-          FROM incidents i
-          JOIN cars c ON c.id=i.car_id
-          JOIN users u ON u.id=i.user_id
-          WHERE date(i.created_at)>=date(?)
-            AND date(i.created_at)<date(?)
-          ORDER BY i.created_at
-        `).bind(start, end).all()
-      ]);
-
-      return json({
-        month: m,
-        checks: checks.results.map(x => ({
-          ...x,
-          date: dateBR(x.created_at)
-        })),
-        incidents: incidents.results.map(x => ({
-          ...x,
-          date: dateBR(x.created_at)
-        }))
-      });
-    }
-
-    return json({
-      error: 'Rota não encontrada.'
-    }, 404);
-
-  } catch (e) {
-    return json({
-      error: e.message || 'Erro interno.'
-    }, 500);
-  }
-     }
-   
+      if (!/^\d{4}-\d{2}$/.test(monthValue || '')) {
+        return 

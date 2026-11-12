@@ -494,4 +494,61 @@ export async function onRequest({ request, env }) {
       ]);
       return json({
         cars: carsResult.results || [],
-        users: usersResult.resu
+        
+        users: usersResult.results || []
+      });
+    }
+
+    // Relatórios mensais: somente administrador.
+    if (path === 'reports' && method === 'GET') {
+      if (!isAdmin) return json({ error: 'Somente o Administrador pode acessar os relatórios.' }, 403);
+      const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      if (!validMonth(month)) return json({ error: 'Mês do relatório inválido.' }, 400);
+      const start = `${month}-01`;
+      const nextMonthDate = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1));
+      const end = nextMonthDate.toISOString().slice(0, 10);
+
+      const [checksResult, incidentsResult, usersResult, carsResult] = await Promise.all([
+        env.DB.prepare(`
+          SELECT ck.id, ck.created_at AS raw_date, ck.km, COALESCE(ck.notes, '') AS notes,
+            c.model || ' · ' || c.plate AS car, u.name AS author
+          FROM checks ck JOIN cars c ON c.id = ck.car_id JOIN users u ON u.id = ck.user_id
+          WHERE date(ck.created_at) >= date(?) AND date(ck.created_at) < date(?)
+          ORDER BY ck.created_at DESC
+        `).bind(start, end).all(),
+        env.DB.prepare(`
+          SELECT i.id, i.created_at AS raw_date, i.severity, i.description,
+            c.model || ' · ' || c.plate AS car, u.name AS author
+          FROM incidents i JOIN cars c ON c.id = i.car_id JOIN users u ON u.id = i.user_id
+          WHERE date(i.created_at) >= date(?) AND date(i.created_at) < date(?)
+          ORDER BY i.created_at DESC
+        `).bind(start, end).all(),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE active = 1').first(),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM cars WHERE active = 1').first()
+      ]);
+
+      const checks = (checksResult.results || []).map(row => ({
+        id: row.id, date: dateBR(row.raw_date), km: row.km,
+        notes: row.notes, car: row.car, author: row.author
+      }));
+      const incidents = (incidentsResult.results || []).map(row => ({
+        id: row.id, date: dateBR(row.raw_date), severity: row.severity,
+        description: row.description, car: row.car, author: row.author
+      }));
+
+      return json({
+        month,
+        totalChecks: checks.length,
+        totalIncidents: incidents.length,
+        totalUsers: Number(usersResult?.n || 0),
+        totalCars: Number(carsResult?.n || 0),
+        checks,
+        incidents
+      });
+    }
+
+    return json({ error: 'Rota não encontrada.' }, 404);
+  } catch (error) {
+    return json({ error: errorMessage(error) }, 500);
+  }
+}

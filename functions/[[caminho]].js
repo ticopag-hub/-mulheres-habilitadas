@@ -94,6 +94,7 @@ async function body(req) {
   if (!req.headers.get('content-type')?.includes('application/json')) {
     return {};
   }
+
   return req.json();
 }
 
@@ -147,7 +148,9 @@ export async function onRequest({ request, env }) {
       const d = await body(request);
 
       if (!env.SETUP_KEY || d.setupKey !== env.SETUP_KEY) {
-        return json({ error: 'Chave de configuração inválida.' }, 403);
+        return json({
+          error: 'Chave de configuração inválida.'
+        }, 403);
       }
 
       const count = await env.DB.prepare(
@@ -155,7 +158,9 @@ export async function onRequest({ request, env }) {
       ).first();
 
       if (count.n) {
-        return json({ error: 'A configuração inicial já foi concluída.' }, 409);
+        return json({
+          error: 'A configuração inicial já foi concluída.'
+        }, 409);
       }
 
       const name = cleanText(d.name);
@@ -177,7 +182,12 @@ export async function onRequest({ request, env }) {
         (id,name,username,role,salt,password_hash,active,created_at)
         VALUES(?,?,?,?,?,?,1,?)`
       ).bind(
-        id, name, username, 'admin', salt, hash,
+        id,
+        name,
+        username,
+        'admin',
+        salt,
+        hash,
         new Date().toISOString()
       ).run();
 
@@ -197,11 +207,15 @@ export async function onRequest({ request, env }) {
         !user ||
         await hashPass(String(d.password || ''), user.salt) !== user.password_hash
       ) {
-        return json({ error: 'Usuário ou senha incorretos.' }, 401);
+        return json({
+          error: 'Usuário ou senha incorretos.'
+        }, 401);
       }
 
       if (!env.SESSION_SECRET) {
-        return json({ error: 'Configuração de sessão não encontrada.' }, 500);
+        return json({
+          error: 'Configuração de sessão não encontrada.'
+        }, 500);
       }
 
       const exp = Date.now() + 86400000;
@@ -254,7 +268,7 @@ export async function onRequest({ request, env }) {
     const isManager = allowed(user, ['admin', 'supervisor']);
     const isAdmin = user.role === 'admin';
 
-    // PAINEL PRINCIPAL - TODOS PODEM CONSULTAR
+    // PAINEL PRINCIPAL
     if (path === 'dashboard' && method === 'GET') {
       const [cars, checks, incidents, recent] = await Promise.all([
         env.DB.prepare(
@@ -307,7 +321,7 @@ export async function onRequest({ request, env }) {
       });
     }
 
-    // CHECKLIST - TODOS PODEM FAZER
+    // CHECKLIST - TODOS OS PERFIS
     if (path === 'checks' && method === 'POST') {
       const d = await body(request);
       const km = Number(d.km);
@@ -323,7 +337,9 @@ export async function onRequest({ request, env }) {
       ).bind(d.car_id).first();
 
       if (!car) {
-        return json({ error: 'Veículo não encontrado ou inativo.' }, 400);
+        return json({
+          error: 'Veículo não encontrado ou inativo.'
+        }, 400);
       }
 
       const id = uid();
@@ -358,7 +374,9 @@ export async function onRequest({ request, env }) {
     // OCORRÊNCIAS - ADMINISTRADOR E PROFESSOR SÊNIOR
     if (path === 'incidents' && method === 'POST') {
       if (!isManager) {
-        return json({ error: 'Sem permissão para registrar ocorrências.' }, 403);
+        return json({
+          error: 'Sem permissão para registrar ocorrências.'
+        }, 403);
       }
 
       const d = await body(request);
@@ -374,7 +392,9 @@ export async function onRequest({ request, env }) {
       ).bind(d.car_id).first();
 
       if (!car) {
-        return json({ error: 'Veículo não encontrado ou inativo.' }, 400);
+        return json({
+          error: 'Veículo não encontrado ou inativo.'
+        }, 400);
       }
 
       await env.DB.prepare(
@@ -417,22 +437,28 @@ export async function onRequest({ request, env }) {
           JOIN users u ON u.id=ck.user_id
           WHERE 1=1
         `;
+
         const params = [];
 
         if (car) {
           query += ' AND ck.car_id=?';
           params.push(car);
         }
+
         if (from) {
           query += ' AND date(ck.created_at)>=date(?)';
           params.push(from);
         }
+
         if (to) {
           query += ' AND date(ck.created_at)<=date(?)';
           params.push(to);
         }
 
-        const result = await env.DB.prepare(query).bind(...params).all();
+        const result = await env.DB.prepare(query)
+          .bind(...params)
+          .all();
+
         rows.push(...result.results);
       }
 
@@ -452,22 +478,28 @@ export async function onRequest({ request, env }) {
           JOIN users u ON u.id=i.user_id
           WHERE 1=1
         `;
+
         const params = [];
 
         if (car) {
           query += ' AND i.car_id=?';
           params.push(car);
         }
+
         if (from) {
           query += ' AND date(i.created_at)>=date(?)';
           params.push(from);
         }
+
         if (to) {
           query += ' AND date(i.created_at)<=date(?)';
           params.push(to);
         }
 
-        const result = await env.DB.prepare(query).bind(...params).all();
+        const result = await env.DB.prepare(query)
+          .bind(...params)
+          .all();
+
         rows.push(...result.results);
       }
 
@@ -481,7 +513,7 @@ export async function onRequest({ request, env }) {
       return json({ rows });
     }
 
-    // CADASTRAR CARRO - ADMINISTRADOR E PROFESSOR SÊNIOR
+    // CADASTRAR CARRO
     if (path === 'cars' && method === 'POST') {
       if (!isManager) {
         return json({ error: 'Sem permissão.' }, 403);
@@ -493,14 +525,20 @@ export async function onRequest({ request, env }) {
       const km = Number(d.km) || 0;
 
       if (!model || !plate || !Number.isFinite(km) || km < 0) {
-        return json({ error: 'Informe modelo, placa e quilometragem válida.' }, 400);
+        return json({
+          error: 'Informe modelo, placa e quilometragem válida.'
+        }, 400);
       }
 
       await env.DB.prepare(
         `INSERT INTO cars(id,model,plate,km,active,created_at)
          VALUES(?,?,?,?,1,?)`
       ).bind(
-        uid(), model, plate, km, new Date().toISOString()
+        uid(),
+        model,
+        plate,
+        km,
+        new Date().toISOString()
       ).run();
 
       return json({ ok: true });
@@ -538,7 +576,9 @@ export async function onRequest({ request, env }) {
       const km = Number(d.km);
 
       if (!model || !plate || !Number.isFinite(km) || km < 0) {
-        return json({ error: 'Informe modelo, placa e quilometragem válida.' }, 400);
+        return json({
+          error: 'Informe modelo, placa e quilometragem válida.'
+        }, 400);
       }
 
       await env.DB.prepare(
@@ -571,7 +611,7 @@ export async function onRequest({ request, env }) {
         }, 400);
       }
 
-      // Professor Sênior não pode criar outro administrador.
+      // PROFESSOR SÊNIOR NÃO PODE CRIAR ADMINISTRADOR
       if (!isAdmin && role === 'admin') {
         return json({
           error: 'Somente o Administrador pode criar outro Administrador.'
@@ -614,17 +654,18 @@ export async function onRequest({ request, env }) {
       ).bind(id).first();
 
       if (!target) {
-        return json({ error: 'Usuário não encontrado.' }, 404);
+        return json({
+          error: 'Usuário não encontrado.'
+        }, 404);
       }
 
-      // O Professor Sênior não pode alterar ou excluir administradores.
+      // PROFESSOR SÊNIOR NÃO PODE ALTERAR ADMINISTRADORES
       if (!isAdmin && target.role === 'admin') {
         return json({
           error: 'Somente o Administrador pode alterar a conta de um Administrador.'
         }, 403);
       }
 
-      // Não permitir desativar a própria conta.
       if (method === 'DELETE') {
         if (id === user.id) {
           return json({
@@ -690,12 +731,15 @@ export async function onRequest({ request, env }) {
       }
 
       const id = passwordMatch[1];
+
       const target = await env.DB.prepare(
         'SELECT id,role FROM users WHERE id=? AND active=1'
       ).bind(id).first();
 
       if (!target) {
-        return json({ error: 'Usuário não encontrado ou inativo.' }, 404);
+        return json({
+          error: 'Usuário não encontrado ou inativo.'
+        }, 404);
       }
 
       if (!isAdmin && target.role === 'admin') {
@@ -749,11 +793,4 @@ export async function onRequest({ request, env }) {
     if (path === 'reports' && method === 'GET') {
       if (!isAdmin) {
         return json({
-          error: 'Somente o Administrador pode emitir relatórios.'
-        }, 403);
-      }
-
-      const monthValue = url.searchParams.get('month');
-
-      if (!/^\d{4}-\d{2}$/.test(monthValue || '')) {
-        return 
+          error: 'Somente

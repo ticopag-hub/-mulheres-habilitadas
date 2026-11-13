@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mulheres Habilitadas - Checklist & Gestão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pinkMain: '#ec4899',
+                        pinkHover: '#db2777',
+                        pinkLight: '#fdf2f8',
+                        pinkDark: '#be185d'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- CABEÇALHO ROSA COM 5 ESTRELAS -->
+    <header class="bg-pinkMain text-white shadow-md">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-white text-pinkMain p-3 rounded-full shadow">
+                    <i class="fa-solid fa-car-side text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">Mulheres Habilitadas</h1>
+                    <div class="flex items-center text-amber-300 text-sm gap-1 mt-0.5">
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <span class="text-xs text-white font-medium ml-1">Excelência 5 Estrelas</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="userInfoHeader" class="hidden flex items-center gap-3 bg-pinkDark bg-opacity-30 px-3 py-1.5 rounded-lg text-sm">
+                <span id="userLoggedName" class="font-semibold"></span>
+                <span id="userLoggedBadge" class="bg-white text-pinkDark px-2 py-0.5 rounded-full text-xs font-bold uppercase"></span>
+                <button onclick="logout()" class="text-white hover:text-pink-200 ml-2" title="Sair">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="max-w-4xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- TELA DE LOGIN -->
+        <section id="screenLogin" class="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-pink-100 max-w-md mx-auto my-8">
+            <div class="text-center mb-6">
+                <div class="inline-block bg-pinkLight p-4 rounded-full text-pinkMain mb-2">
+                    <i class="fa-solid fa-lock text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Acesso ao Sistema</h2>
+                <p class="text-sm text-gray-500">Selecione seu usuário e informe sua senha</p>
+            </div>
+
+            <form id="formLogin" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Usuário / Instrutor</label>
+                    <select id="loginUserSelect" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pinkMain focus:border-pinkMain outline-none" required>
+                        <option value="">Carregando usuários...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Senha</label>
+                    <input type="password" id="loginPassword" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pinkMain focus:border-pinkMain outline-none" placeholder="Digite sua senha" required>
+                </div>
+                <button type="submit" class="w-full bg-pinkMain hover:bg-pinkHover text-white font-bold py-3 rounded-lg shadow-md transition-colors">
+                    Entrar no Sistema
+                </button>
+            </form>
+        </section>
+
+        <!-- TELA PRINCIPAL -->
+        <section id="screenApp" class="hidden space-y-6">
+            
+            <!-- ABAS -->
+            <div class="flex border-b border-gray-200 bg-white rounded-t-xl p-1 shadow-sm">
+                <button onclick="switchTab('checklist')" id="tabChecklist" class="flex-1 py-3 px-4 font-semibold text-center border-b-2 border-pinkMain text-pinkMain transition-colors">
+                    <i class="fa-solid fa-clipboard-check mr-2"></i>Checklist
+                </button>
+                <button onclick="switchTab('ocorrencias')" id="tabOcorrencias" class="flex-1 py-3 px-4 font-semibold text-center text-gray-500 hover:text-pinkMain transition-colors">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>Ocorrências
+                </button>
+                <button id="tabAdmin" onclick="switchTab('admin')" class="hidden flex-1 py-3 px-4 font-semibold text-center text-gray-500 hover:text-pinkMain transition-colors">
+                    <i class="fa-solid fa-user-gear mr-2"></i>Painel Admin
+                </button>
+            </div>
+
+            <!-- ABA 1: CHECKLIST -->
+            <div id="contentChecklist" class="bg-white p-6 rounded-b-xl shadow-sm border border-gray-100 space-y-4">
+                <h3 class="text-lg font-bold text-gray-800 border-b pb-2">Nova Vistoria de Veículo</h3>
+                
+                <form id="formChecklist" onsubmit="handleChecklistSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Veículo</label>
+                            <select id="checkVeiculo" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" required>
+                                <option value="">Selecione o carro...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Quilometragem Atual (KM)</label>
+                            <input type="number" id="checkKm" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" placeholder="Ex: 45200" required>
+                        </div>
+                    </div>
+
+                    <div class="bg-pinkLight p-4 rounded-xl border border-pink-200 space-y-3">
+                        <span class="font-bold text-pinkDark text-sm">Itens de Verificação:</span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="itemPneus" class="w-4 h-4 text-pinkMain rounded focus:ring-pinkMain" checked> Pneus / Calibragem OK
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="itemNivelOleo" class="w-4 h-4 text-pinkMain rounded focus:ring-pinkMain" checked> Nível de Óleo OK
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="itemCombustivel" class="w-4 h-4 text-pinkMain rounded focus:ring-pinkMain" checked> Combustível Suficiente
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="itemLimpeza" class="w-4 h-4 text-pinkMain rounded focus:ring-pinkMain" checked> Limpeza Interna/Externa OK
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Observações Adicionais</label>
+                        <textarea id="checkObs" rows="2" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" placeholder="Algum detalhe sobre o estado do carro?"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-pinkMain hover:bg-pinkHover text-white font-bold py-3 rounded-lg shadow transition-colors">
+                        Finalizar Vistoria
+                    </button>
+                </form>
+            </div>
+
+            <!-- ABA 2: OCORRÊNCIAS (ATÉ 5 ANEXOS) -->
+            <div id="contentOcorrencias" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-gray-100 space-y-6">
+                <div class="border-b pb-3">
+                    <h3 class="text-lg font-bold text-gray-800">Relatar Nova Ocorrência</h3>
+                    <p class="text-xs text-gray-500">Registre sinistros, avarias ou manutenções urgentes com fotos ou documentos.</p>
+                </div>
+
+                <form id="formOcorrencia" onsubmit="handleOcorrenciaSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Veículo Envolvido</label>
+                            <select id="ocorrenciaVeiculo" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" required>
+                                <option value="">Selecione o carro...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Gravidade / Tipo</label>
+                            <select id="ocorrenciaTipo" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" required>
+                                <option value="Baixa - Detalhe Estético">Baixa - Detalhe Estético</option>
+                                <option value="Média - Manutenção Preventiva">Média - Manutenção Preventiva</option>
+                                <option value="Alta - Avaria / Acidente">Alta - Avaria / Acidente</option>
+                                <option value="Urgente - Carro Inoperante">Urgente - Carro Inoperante</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição Detalhada</label>
+                        <textarea id="ocorrenciaDesc" rows="3" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-pinkMain outline-none" placeholder="Relate detalhadamente o ocorrido..." required></textarea>
+                    </div>
+
+                    <div class="bg-gray-50 p-4 rounded-xl border border-dashed border-pink-300 space-y-2">
+                        <label class="block text-sm font-bold text-pinkDark">
+                            <i class="fa-solid fa-paperclip mr-1"></i> Anexar Documentos/Fotos (Até 5 arquivos)
+                        </label>
+                        <p class="text-xs text-gray-500">Selecione até 5 arquivos de qualquer tipo por ocorrência.</p>
+                        
+                        <input type="file" id="ocorrenciaAnexos" multiple accept="*/*" onchange="validarQuantidadeAnexos(this)" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pinkLight file:text-pinkDark hover:file:bg-pink-100 cursor-pointer">
+                        <div id="anexosPreview" class="text-xs text-gray-600 font-medium"></div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-pinkMain hover:bg-pinkHover text-white font-bold py-3 rounded-lg shadow transition-colors">
+                        Enviar Ocorrência
+                    </button>
+                </form>
+            </div>
+
+            <!-- ABA 3: PAINEL ADMIN -->
+            <div id="contentAdmin" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-gray-100 space-y-8">
+                
+                <!-- GESTÃO DE VEÍCULOS -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1"><i class="fa-solid fa-car mr-1 text-pinkMain"></i> Gestão de Veículos</h3>
+                    <p class="text-xs text-gray-500 mb-4">Adicione novos carros ou exclua veículos da frota.</p>
+
+                    <form id="formAddCarro" onsubmit="handleAddCarro(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 bg-pinkLight p-4 rounded-xl border border-pink-200">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Modelo do Carro</label>
+                            <input type="text" id="novoCarModel" class="w-full p-2 border rounded text-sm bg-white" placeholder="Ex: Onix Branco" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Placa</label>
+                            <input type="text" id="novoCarPlate" class="w-full p-2 border rounded text-sm bg-white" placeholder="Ex: ABC-1234" required>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-pinkMain hover:bg-pinkHover text-white font-bold py-2 px-4 rounded text-sm shadow">
+                                <i class="fa-solid fa-plus mr-1"></i> Adicionar Carro
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700 border-b">
+                                    <th class="p-2.5">Modelo</th>
+                                    <th class="p-2.5">Placa</th>
+                                    <th class="p-2.5">KM Atual</th>
+                                    <th class="p-2.5 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaCarrosAdmin"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- GESTÃO DE USUÁRIOS E SENHAS -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1"><i class="fa-solid fa-users mr-1 text-pinkMain"></i> Usuários, Senhas e WhatsApp</h3>
+                    <p class="text-xs text-gray-500 mb-4">Cadastre usuários, altere senhas individuais e defina o WhatsApp de cada administrador.</p>
+
+                    <form id="formAddUsuario" onsubmit="handleAddUsuario(event)" class="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-4 bg-pinkLight p-4 rounded-xl border border-pink-200">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Nome Completo</label>
+                            <input type="text" id="novoUserName" class="w-full p-2 border rounded text-sm bg-white" placeholder="Ex: Professora Juliana" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Cargo</label>
+                            <select id="novoUserRole" class="w-full p-2 border rounded text-sm bg-white" required>
+                                <option value="admin">Admin</option>
+                                <option value="senior">Prof. Sênior</option>
+                                <option value="instrutor">Instrutor(a)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Senha Inicial</label>
+                            <input type="text" id="novoUserPass" class="w-full p-2 border rounded text-sm bg-white" placeholder="Ex: 1234" required>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-pinkMain hover:bg-pinkHover text-white font-bold py-2 px-2 rounded text-sm shadow">
+                                <i class="fa-solid fa-user-plus mr-1"></i> Criar
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="space-y-3" id="listaUsuariosAdmin"></div>
+                </div>
+
+                <!-- RELATÓRIO MENSAL VIA WHATSAPP -->
+                <div class="bg-pinkLight p-4 rounded-xl border border-pink-200">
+                    <h4 class="font-bold text-pinkDark text-sm mb-2"><i class="fa-solid fa-file-invoice mr-1"></i> Enviar Relatório Mensal Geral</h4>
+                    <p class="text-xs text-gray-600 mb-3">Envie o resumo mensal de vistorias e ocorrências para o WhatsApp do Administrador selecionado.</p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <select id="adminRelatorioSelect" class="flex-1 p-2 border rounded-lg text-sm bg-white">
+                            <option value="">Selecione o Administrador...</option>
+                        </select>
+                        <button onclick="enviarRelatorioMensalWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow flex items-center justify-center gap-2">
+                            <i class="fa-brands fa-whatsapp text-lg"></i> Enviar Relatório Mensal
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-500">
+        &copy; 2026 Mulheres Habilitadas - Todos os direitos reservados.
+    </footer>
+
+    <!-- FIREBASE E SCRIPTS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // COLE SUAS CHAVES REAIS DO FIREBASE AQUI:
+        const firebaseConfig = {
+            apiKey: "COLE_SUA_API_KEY_AQUI",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            projectId: "SEU_PROJETO",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let systemData = {
+            users: [
+                { id: "admin1", name: "Administradora Geral", role: "admin", pass: "1234", phone: "" },
+                { id: "prof1", name: "Professora Carla", role: "senior", pass: "1234", phone: "" },
+                { id: "prof2", name: "Instrutora Maria", role: "instrutor", pass: "1234", phone: "" }
+            ],
+            cars: [
+                { id: "car1", model: "Hyundai HB20 Pink", plate: "ABC-1234", km: 45000 },
+                { id: "car2", model: "Fiat Argo Branco", plate: "XYZ-9876", km: 32100 }
+            ],
+            checklistLogs: [],
+            ocorrenciasLogs: []
+        };
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await carregarDadosFirebase();
+            renderUserSelect();
+            renderCarsSelect();
+            renderAdminPanel();
+        });
+
+        async function carregarDadosFirebase() {
+            try {
+                const docRef = doc(db, "sistema", "usuarios_dados");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    systemData = docSnap.data();
+                } else {
+                    await salvarDadosFirebase();
+                }
+            } catch (err) {
+                console.log("Aguardando configuração do Firebase:", err);
+            }
+        }
+
+        async function salvarDadosFirebase() {
+            try {
+                await setDoc(doc(db, "sistema", "usuarios_dados"), systemData);
+            } catch (err) {
+                console.error("Erro ao salvar dados:", err);
+            }
+        }
+
+        function renderUserSelect() {
+            const select = document.getElementById('loginUserSelect');
+            select.innerHTML = '<option value="">Selecione o usuário...</option>';
+            systemData.users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = `${u.name} (${u.role.toUpperCase()})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderCarsSelect() {
+            const checkSel = document.getElementById('checkVeiculo');
+            const ocSel = document.getElementById('ocorrenciaVeiculo');
+            
+            const options = systemData.cars.map(c => `<option value="${c.id}">${c.model} - ${c.plate} (KM: ${c.km})</option>`).join('');
+            checkSel.innerHTML = '<option value="">Selecione o carro...</option>' + options;
+            ocSel.innerHTML = '<option value="">Selecione o carro...</option>' + options;
+        }
+
+        window.handleLogin = function(e) {
+            e.preventDefault();
+            const userId = document.getElementById('loginUserSelect').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            const user = systemData.users.find(u => u.id === userId);
+            if (user && user.pass === pass) {
+                currentUser = user;
+                document.getElementById('screenLogin').classList.add('hidden');
+                document.getElementById('screenApp').classList.remove('hidden');
+                document.getElementById('userInfoHeader').classList.remove('hidden');
+                document.getElementById('userLoggedName').textContent = user.name;
+                document.getElementById('userLoggedBadge').textContent = user.role;
+
+                if (user.role === 'admin' || user.role === 'senior') {
+                    document.getElementById('tabAdmin').classList.remove('hidden');
+                }
+            } else {
+                alert('Senha incorreta para o usuário selecionado!');
+            }
+        };
+
+        window.logout = function() {
+            currentUser = null;
+            document.getElementById('screenApp').classList.add('hidden');
+            document.getElementById('screenLogin').classList.remove('hidden');
+            document.getElementById('userInfoHeader').classList.add('hidden');
+            document.getElementById('loginPassword').value = '';
+        };
+
+        window.switchTab = function(tabName) {
+            ['Checklist', 'Ocorrencias', 'Admin'].forEach(t => {
+                const btn = document.getElementById(`tab${t}`);
+                const content = document.getElementById(`content${t}`);
+                if (btn && content) {
+                    if (t.toLowerCase() === tabName.toLowerCase()) {
+                        btn.className = "flex-1 py-3 px-4 font-semibold text-center border-b-2 border-pinkMain text-pinkMain transition-colors";
+                        content.classList.remove('hidden');
+                    } else {
+                        btn.className = "flex-1 py-3 px-4 font-semibold text-center text-gray-500 hover:text-pinkMain transition-colors";
+                        content.classList.add('hidden');
+                    }
+                }
+            });
+        };
+
+        function renderAdminPanel() {
+            renderCarrosAdmin();
+            renderUsuariosAdmin();
+        }
+
+        function renderCarrosAdmin() {
+            const tbody = document.getElementById('listaCarrosAdmin');
+            tbody.innerHTML = '';
+
+            systemData.cars.forEach(car => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="p-2.5 font-medium">${car.model}</td>
+                    <td class="p-2.5">${car.plate}</td>
+                    <td class="p-2.5">${car.km} KM</td>
+                    <td class="p-2.5 text-center">
+                        <button onclick="deletarCarro('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded text-xs font-bold shadow">
+                            <i class="fa-solid fa-trash"></i> Excluir
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.handleAddCarro = async function(e) {
+            e.preventDefault();
+            const model = document.getElementById('novoCarModel').value;
+            const plate = document.getElementById('novoCarPlate').value;
+
+            systemData.cars.push({
+                id: 'car_' + Date.now(),
+                model,
+                plate,
+                km: 0
+            });
+
+            await salvarDadosFirebase();
+            document.getElementById('formAddCarro').reset();
+            renderCarrosAdmin();
+            renderCarsSelect();
+            alert('Veículo adicionado com sucesso!');
+        };
+
+        window.deletarCarro = async function(carId) {
+            if (confirm('Tem certeza que deseja excluir este veículo?')) {
+                systemData.cars = systemData.cars.filter(c => c.id !== carId);
+                await salvarDadosFirebase();
+                renderCarrosAdmin();
+                renderCarsSelect();
+                alert('Veículo excluído com sucesso!');
+            }
+        };
+
+        function renderUsuariosAdmin() {
+            const container = document.getElementById('listaUsuariosAdmin');
+            const selectRelatorio = document.getElementById('adminRelatorioSelect');
+            container.innerHTML = '';
+            selectRelatorio.innerHTML = '<option value="">Selecione o Administrador...</option>';
+
+            systemData.users.forEach(u => {
+                const div = document.createElement('div');
+                div.className = "flex flex-col sm:flex-row items-center justify-between p-3 border rounded-lg bg-slate-50 gap-3";
+                div.innerHTML = `
+                    <div class="w-full sm:w-1/3">
+                        <span class="font-bold text-gray-800">${u.name}</span>
+                        <span class="text-xs text-pinkDark font-semibold uppercase block">${u.role}</span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-2/3 justify-end">
+                        <div class="flex items-center gap-1 w-full sm:w-auto">
+                            <span class="text-xs text-gray-500">Senha:</span>
+                            <input type="text" id="pass_${u.id}" value="${u.pass}" class="p-1.5 border rounded text-xs w-20 text-center font-mono">
+                            <button onclick="atualizarSenhaUsuario('${u.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded text-xs font-bold">
+                                Senha
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-1 w-full sm:w-auto">
+                            <input type="text" id="phone_${u.id}" value="${u.phone || ''}" placeholder="WhatsApp (55...)" class="p-1.5 border rounded text-xs w-32">
+                            <button onclick="atualizarCelularUsuario('${u.id}')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded text-xs font-bold">
+                                Zap
+                            </button>
+                        </div>
+                        ${systemData.users.length > 1 ? `
+                        <button onclick="deletarUsuario('${u.id}')" class="bg-red-500 hover:bg-red-600 text-white px-2.5 py-1.5 rounded text-xs font-bold">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>` : ''}
+                    </div>
+                `;
+                container.appendChild(div);
+
+                if (u.role === 'admin') {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = `${u.name} (${u.phone || 'Sem WhatsApp'})`;
+                    selectRelatorio.appendChild(opt);
+                }
+            });
+        }
+
+        window.handleAddUsuario = async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('novoUserName').value;
+            const role = document.getElementById('novoUserRole').value;
+            const pass = document.getElementById('novoUserPass').value;
+
+            systemData.users.push({
+                id: 'user_' + Date.now(),
+                name,
+                role,
+                pass,
+                phone: ''
+            });
+
+            await salvarDadosFirebase();
+            document.getElementById('formAddUsuario').reset();
+            renderUsuariosAdmin();
+            renderUserSelect();
+            alert('Usuário criado com sucesso!');
+        };
+
+        window.atualizarSenhaUsuario = async function(userId) {
+            const inputPass = document.getElementById(`pass_${userId}`);
+            const user = systemData.users.find(u => u.id === userId);
+            if (user && inputPass.value.trim() !== '') {
+                user.pass = inputPass.value.trim();
+                await salvarDadosFirebase();
+                alert(`Senha atualizada para ${user.name}!`);
+            } else {
+                alert('A senha não pode estar em branco.');
+            }
+        };
+
+        window.atualizarCelularUsuario = async function(userId) {
+            const inputPhone = document.getElementById(`phone_${userId}`);
+            const user = systemData.users.find(u => u.id === userId);
+            if (user) {
+                user.phone = inputPhone.value.replace(/\D/g, '');
+                await salvarDadosFirebase();
+                alert(`WhatsApp atualizado para ${user.name}!`);
+                renderUsuariosAdmin();
+            }
+        };
+
+        window.deletarUsuario = async function(userId) {
+            if (confirm('Tem certeza que deseja excluir este usuário?')) {
+                systemData.users = systemData.users.filter(u => u.id !== userId);
+                await salvarDadosFirebase();
+                renderUsuariosAdmin();
+                renderUserSelect();
+                alert('Usuário excluído com sucesso!');
+            }
+        };
+
+        window.enviarRelatorioMensalWhatsApp = function() {
+            const adminId = document.getElementById('adminRelatorioSelect').value;
+            if (!adminId) {
+                alert('Selecione um administrador para enviar o relatório.');
+                return;
+            }
+
+            const adm = systemData.users.find(u => u.id === adminId);
+            if (!adm || !adm.phone) {
+                alert('O administrador selecionado não possui um número de WhatsApp cadastrado.');
+                return;
+            }
+
+            const totalVistorias = systemData.checklistLogs ? systemData.checklistLogs.length : 0;
+            const totalOcorrencias = systemData.ocorrenciasLogs ? systemData.ocorrenciasLogs.length : 0;
+
+            const mensagem = encodeURIComponent(
+                `*RELATÓRIO MENSAL GERAL - MULHERES HABILITADAS*\n` +
+                `----------------------------------------\n` +
+                `*Destinatário:* ${adm.name}\n` +
+                `*Total de Vistorias:* ${totalVistorias}\n` +
+                `*Total de Ocorrências:* ${totalOcorrencias}\n` +
+                `*Veículos Ativos:* ${systemData.cars.length}\n` +
+                `----------------------------------------\n` +
+                `Relatório gerado pelo Sistema de Gestão.`
+            );
+
+            window.open(`https://api.whatsapp.com/send?phone=${adm.phone}&text=${mensagem}`, '_blank');
+        };
+
+        window.handleChecklistSubmit = async function(e) {
+            e.preventDefault();
+            const carId = document.getElementById('checkVeiculo').value;
+            const km = parseInt(document.getElementById('checkKm').value);
+            const obs = document.getElementById('checkObs').value;
+
+            const car = systemData.cars.find(c => c.id === carId);
+            if (car) car.km = km;
+
+            if (!systemData.checklistLogs) systemData.checklistLogs = [];
+            systemData.checklistLogs.push({
+                id: Date.now().toString(),
+                data: new Date().toLocaleDateString('pt-BR'),
+                autor: currentUser.name,
+                carId,
+                km,
+                obs
+            });
+
+            await salvarDadosFirebase();
+            alert('Vistoria salva com sucesso!');
+            document.getElementById('formChecklist').reset();
+            renderCarsSelect();
+            renderCarrosAdmin();
+        };
+
+        window.validarQuantidadeAnexos = function(input) {
+            const preview = document.getElementById('anexosPreview');
+            if (input.files.length > 5) {
+                alert('Você só pode anexar no máximo 5 arquivos por ocorrência.');
+                input.value = '';
+                preview.textContent = '';
+                return;
+            }
+            preview.textContent = `📎 ${input.files.length} arquivo(s) selecionado(s): ` + 
+                Array.from(input.files).map(f => f.name).join(', ');
+        };
+
+        window.handleOcorrenciaSubmit = async function(e) {
+            e.preventDefault();
+            const carId = document.getElementById('ocorrenciaVeiculo').value;
+            const tipo = document.getElementById('ocorrenciaTipo').value;
+            const desc = document.getElementById('ocorrenciaDesc').value;
+            const fileInput = document.getElementById('ocorrenciaAnexos');
+
+            const arquivosAnexados = [];
+            if (fileInput.files.length > 0) {
+                for (let file of Array.from(fileInput.files)) {
+                    const base64 = await convertFileToBase64(file);
+                    arquivosAnexados.push({
+                        nome: file.name,
+                        tipo: file.type,
+                        dados: base64
+                    });
+                }
+            }
+
+            if (!systemData.ocorrenciasLogs) systemData.ocorrenciasLogs = [];
+            systemData.ocorrenciasLogs.push({
+                id: Date.now().toString(),
+                data: new Date().toLocaleDateString('pt-BR'),
+                autor: currentUser.name,
+                carId,
+                tipo,
+                desc,
+                anexosCount: arquivosAnexados.length,
+                anexos: arquivosAnexados
+            });
+
+            await salvarDadosFirebase();
+            alert(`Ocorrência registrada com sucesso! (${arquivosAnexados.length} arquivo(s) anexados)`);
+            document.getElementById('formOcorrencia').reset();
+            document.getElementById('anexosPreview').textContent = '';
+        };
+
+        function convertFileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+    </script>
+</body>
+</html>

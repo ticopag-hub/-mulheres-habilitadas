@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mulheres Habilitadas | Excelência 5 Estrelas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{pinkMain:'#ec4899',pinkDark:'#be185d',pinkLight:'#fdf2f8'}}}}</script>
+<style>
+body{background:#fff7fb} .panel{background:white;border:1px solid #fce7f3;border-radius:16px;box-shadow:0 4px 18px #9d174d0d}
+input,select,textarea{width:100%;border:1px solid #e5e7eb;border-radius:9px;padding:10px;background:white}
+.btn{background:#ec4899;color:white;border-radius:9px;padding:10px 14px;font-weight:700}
+.btn2{background:#fce7f3;color:#9d174d;border-radius:9px;padding:9px 12px;font-weight:600}
+.small{font-size:12px;color:#64748b}
+</style>
+</head>
+<body class="min-h-screen text-slate-800">
+<header class="bg-pinkMain text-white shadow">
+ <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+  <div><h1 class="text-xl font-extrabold">🚘 Mulheres Habilitadas</h1><p class="text-xs text-pink-100">★★★★★ Excelência 5 Estrelas</p></div>
+  <div id="userBar" class="hidden items-center gap-3 text-sm"><span id="who"></span><button class="btn2" onclick="sair()">Sair</button></div>
+ </div>
+</header>
+<main class="max-w-5xl mx-auto p-4 space-y-4">
+ <div id="status" class="hidden rounded-xl p-3 text-sm"></div>
+ <section id="login" class="panel max-w-md mx-auto p-6 mt-8">
+  <h2 class="text-xl font-bold text-center mb-1">Acesso ao sistema</h2><p class="small text-center mb-5">Entre com seu e-mail e senha cadastrados</p>
+  <form id="loginForm" class="space-y-3">
+   <label class="block text-sm font-semibold">E-mail<input id="email" type="email" autocomplete="username" required></label>
+   <label class="block text-sm font-semibold">Senha<input id="password" type="password" autocomplete="current-password" required></label>
+   <button class="btn w-full" type="submit">Entrar</button>
+  </form>
+ </section>
+ <section id="app" class="hidden space-y-4">
+  <nav class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   <button class="btn" onclick="aba('check')">Checklist</button>
+   <button class="btn2" onclick="aba('ocorr')">Ocorrências</button>
+   <button class="btn2" onclick="aba('historico')">Histórico</button>
+   <button id="adminTab" class="btn2 hidden" onclick="aba('admin')">Painel de gestão</button>
+  </nav>
+  <section id="check" class="panel p-5 space-y-4">
+   <h2 class="text-lg font-bold">Nova vistoria de veículo</h2>
+   <form id="checkForm" class="space-y-3">
+    <label class="block text-sm font-semibold">Veículo<select id="checkCar" required></select></label>
+    <label class="block text-sm font-semibold">Quilometragem atual<input id="checkKm" type="number" min="0" required></label>
+    <div class="rounded-xl bg-pinkLight p-4 space-y-2 text-sm font-medium">
+     <p class="font-bold text-pinkDark">Itens de verificação</p>
+     <label class="flex gap-2"><input id="pneus" type="checkbox" checked class="!w-auto"> Pneus / calibragem OK</label>
+     <label class="flex gap-2"><input id="oleo" type="checkbox" checked class="!w-auto"> Nível de óleo OK</label>
+     <label class="flex gap-2"><input id="combustivel" type="checkbox" checked class="!w-auto"> Combustível suficiente</label>
+     <label class="flex gap-2"><input id="limpeza" type="checkbox" checked class="!w-auto"> Limpeza interna/externa OK</label>
+    </div>
+    <label class="block text-sm font-semibold">Observações<textarea id="checkObs" rows="3"></textarea></label>
+    <button class="btn w-full">Salvar vistoria</button>
+   </form>
+  </section>
+  <section id="ocorr" class="panel p-5 space-y-4 hidden">
+   <h2 class="text-lg font-bold">Registrar ocorrência</h2><p class="small">Registre avarias, sinistros ou necessidades de manutenção. Esta versão trabalha somente com texto, sem anexos.</p>
+   <form id="occForm" class="space-y-3">
+    <label class="block text-sm font-semibold">Veículo<select id="occCar" required></select></label>
+    <label class="block text-sm font-semibold">Gravidade / tipo<select id="occType"><option>Baixa - Detalhe estético</option><option>Média - Manutenção preventiva</option><option>Alta - Avaria / acidente</option><option>Urgente - Carro inoperante</option></select></label>
+    <label class="block text-sm font-semibold">Descrição<textarea id="occDesc" rows="4" required></textarea></label>
+    <button class="btn w-full">Salvar ocorrência</button>
+   </form>
+  </section>
+  <section id="historico" class="panel p-5 space-y-4 hidden">
+   <div class="flex flex-wrap justify-between gap-2"><h2 class="text-lg font-bold">Histórico de vistorias e ocorrências</h2><button class="btn2" onclick="carregarHistorico()">Atualizar</button></div>
+   <h3 class="font-bold text-pinkDark">Vistorias</h3><div id="historyChecks" class="space-y-2 small">Carregando...</div>
+   <h3 class="font-bold text-pinkDark pt-3">Ocorrências</h3><div id="historyOcc" class="space-y-2 small">Carregando...</div>
+  </section>
+  <section id="admin" class="panel p-5 space-y-6 hidden">
+   <div id="carsAdmin" class="space-y-3">
+    <h2 class="text-lg font-bold">Gestão de veículos</h2>
+    <form id="carForm" class="grid sm:grid-cols-3 gap-2"><input id="carModel" placeholder="Modelo do veículo" required><input id="carPlate" placeholder="Placa" required><button class="btn">Adicionar veículo</button></form>
+    <div id="carsList" class="space-y-2"></div>
+   </div>
+   <div id="usersAdmin" class="space-y-3 border-t pt-5">
+    <h2 class="text-lg font-bold">Usuários e permissões</h2>
+    <p class="small">O sistema cria o acesso de e-mail/senha e associa o perfil de acesso. Não reutilize senhas de outros serviços.</p>
+    <form id="userForm" class="grid sm:grid-cols-2 gap-2">
+     <input id="newName" placeholder="Nome completo" required>
+     <input id="newEmail" type="email" placeholder="E-mail de acesso" required>
+     <select id="newRole"><option value="instrutor">Professor</option><option value="senior">Professor sênior</option><option value="admin">Administrador</option></select>
+     <input id="newPass" type="password" minlength="6" placeholder="Senha inicial (mín. 6 caracteres)" required>
+     <button class="btn sm:col-span-2">Criar usuário</button>
+    </form>
+    <div id="usersList" class="space-y-2"></div>
+   </div>
+   <div id="monthlyReport" class="border-t pt-5 space-y-2">
+    <h2 class="text-lg font-bold">Relatório mensal</h2><input id="reportPhone" placeholder="WhatsApp do destinatário com DDI e DDD (ex.: 5511999999999)">
+    <button class="btn2" onclick="relatorioWhatsApp()">Preparar relatório no WhatsApp</button>
+   </div>
+  </section>
+ </section>
+</main>
+<footer class="text-center text-xs text-slate-400 py-6">© 2026 Mulheres Habilitadas</footer>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,createUserWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,doc,getDoc,collection,addDoc,getDocs,query,orderBy,serverTimestamp,setDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig={
+ apiKey:"AIzaSyAVMMoeudB_9N348idNJEoG0K5MpYeqxxk",
+ authDomain:"mulheres-habilitadas-39984.firebaseapp.com",
+ projectId:"mulheres-habilitadas-39984",
+ storageBucket:"mulheres-habilitadas-39984.firebasestorage.app",
+ messagingSenderId:"407738107608",
+ appId:"1:407738107608:web:83d22da4a656deca4639ad"
+};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+let perfil=null, carros=[], usuarios=[], checks=[], ocorrencias=[];
+const $=id=>document.getElementById(id);
+function aviso(msg,ok=false){$('status').textContent=msg;$('status').className='rounded-xl p-3 text-sm '+(ok?'bg-green-50 text-green-800':'bg-red-50 text-red-800');$('status').classList.remove('hidden');}
+function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function admin(){return perfil?.tipo==='admin'} function senior(){return perfil?.tipo==='senior'}
+function dataTexto(v){return v?.toDate?v.toDate().toLocaleString('pt-BR'):new Date(v||Date.now()).toLocaleString('pt-BR');}
+async function perfilAtual(user){const snap=await getDoc(doc(db,'usuarios',user.uid));if(!snap.exists())throw new Error('Seu acesso ainda não tem perfil cadastrado. Peça ao administrador para configurar seu perfil.');perfil={uid:user.uid,...snap.data()};if(perfil.ativo!==true)throw new Error('Este usuário está inativo.');}
+onAuthStateChanged(auth,async user=>{
+ if(!user){perfil=null;$('login').classList.remove('hidden');$('app').classList.add('hidden');$('userBar').classList.add('hidden');return;}
+ try{await perfilAtual(user);$('login').classList.add('hidden');$('app').classList.remove('hidden');$('userBar').classList.remove('hidden');$('userBar').classList.add('flex');$('who').textContent=perfil.nome+' · '+({admin:'Administrador',senior:'Professor sênior',instrutor:'Professor'}[perfil.tipo]||perfil.tipo);$('adminTab').classList.toggle('hidden',!(admin()||senior()));$('usersAdmin').classList.toggle('hidden',!admin());$('monthlyReport').classList.toggle('hidden',!admin());await carregarTudo();}
+ catch(e){aviso(e.message);await signOut(auth);}
+});
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);}catch(err){aviso('Não foi possível entrar. Confira o e-mail e a senha. ('+err.code+')');}});
+window.sair=()=>signOut(auth);
+window.aba=id=>{['check','ocorr','historico','admin'].forEach(x=>$(x).classList.toggle('hidden',x!==id));if(id==='historico')carregarHistorico();if(id==='admin')carregarTudo();};
+async function carregarTudo(){await carregarCarros();if(admin())await carregarUsuarios();await carregarHistorico();}
+async function carregarCarros(){const s=await getDocs(query(collection(db,'carros'),orderBy('modelo')));carros=s.docs.map(d=>({id:d.id,...d.data()}));const opts='<option value="">Selecione...</option>'+carros.filter(c=>c.ativo!==false).map(c=>`<option value="${c.id}">${escapeHtml(c.modelo)} - ${escapeHtml(c.placa)}</option>`).join('');$('checkCar').innerHTML=opts;$('occCar').innerHTML=opts;$('carsList').innerHTML=carros.map(c=>`<div class="flex justify-between items-center border rounded-lg p-3 gap-2"><span><b>${escapeHtml(c.modelo)}</b> · ${escapeHtml(c.placa)} <small>KM ${Number(c.km||0)}</small></span>${(admin()||senior())?`<button class="btn2" data-car="${c.id}">${c.ativo===false?'Reativar':'Desativar'}</button>`:''}</div>`).join('')||'<p class="small">Nenhum veículo cadastrado.</p>';$('carsList').querySelectorAll('button[data-car]').forEach(b=>b.onclick=()=>alternarCarro(b.dataset.car));}
+$('carForm').addEventListener('submit',async e=>{e.preventDefault();if(!(admin()||senior()))return;try{await addDoc(collection(db,'carros'),{modelo:$('carModel').value.trim(),placa:$('carPlate').value.trim().toUpperCase(),km:0,ativo:true,criadoEm:serverTimestamp(),criadoPor:auth.currentUser.uid});e.target.reset();await carregarCarros();aviso('Veículo cadastrado.',true);}catch(err){aviso('Falha ao cadastrar veículo: '+err.message);}});
+async function alternarCarro(id){const c=carros.find(x=>x.id===id);try{await updateDoc(doc(db,'carros',id),{ativo:c.ativo===false});await carregarCarros();aviso('Situação do veículo atualizada.',true);}catch(e){aviso('Não foi possível atualizar: '+e.message);}}
+$('checkForm').addEventListener('submit',async e=>{e.preventDefault();try{const car=carros.find(c=>c.id===$('checkCar').value);if(!car)throw new Error('Selecione um veículo.');const km=Number($('checkKm').value);await addDoc(collection(db,'checklists'),{carId:car.id,carro:car.modelo,placa:car.placa,km,itens:{pneus:$('pneus').checked,oleo:$('oleo').checked,combustivel:$('combustivel').checked,limpeza:$('limpeza').checked},observacoes:$('checkObs').value.trim(),autor:perfil.nome,autorUid:auth.currentUser.uid,criadoEm:serverTimestamp()});await updateDoc(doc(db,'carros',car.id),{km});e.target.reset();await carregarCarros();await carregarHistorico();aviso('Vistoria salva com sucesso.',true);}catch(err){aviso('A vistoria não foi salva: '+err.message);}});
+$('occForm').addEventListener('submit',async e=>{e.preventDefault();try{const car=carros.find(c=>c.id===$('occCar').value);if(!car)throw new Error('Selecione um veículo.');await addDoc(collection(db,'ocorrencias'),{carId:car.id,carro:car.modelo,placa:car.placa,tipo:$('occType').value,descricao:$('occDesc').value.trim(),autor:perfil.nome,autorUid:auth.currentUser.uid,criadoEm:serverTimestamp()});e.target.reset();await carregarHistorico();aviso('Ocorrência registrada com sucesso.',true);}catch(err){aviso('A ocorrência não foi salva: '+err.message);}});
+async function carregarHistorico(){if(!auth.currentUser)return;try{const [a,b]=await Promise.all([getDocs(query(collection(db,'checklists'),orderBy('criadoEm','desc'))),getDocs(query(collection(db,'ocorrencias'),orderBy('criadoEm','desc')))]);checks=a.docs.map(d=>({id:d.id,...d.data()}));ocorrencias=b.docs.map(d=>({id:d.id,...d.data()}));$('historyChecks').innerHTML=checks.map(x=>`<article class="border rounded-lg p-3"><b>${escapeHtml(x.carro)}</b> · ${escapeHtml(x.placa)} · ${dataTexto(x.criadoEm)}<p>KM: ${x.km} · Responsável: ${escapeHtml(x.autor)}</p><p>${escapeHtml(x.observacoes||'Sem observações')}</p><p class="small">Pneus: ${x.itens?.pneus?'OK':'Verificar'} | Óleo: ${x.itens?.oleo?'OK':'Verificar'} | Combustível: ${x.itens?.combustivel?'OK':'Verificar'} | Limpeza: ${x.itens?.limpeza?'OK':'Verificar'}</p></article>`).join('')||'Nenhuma vistoria registrada.';$('historyOcc').innerHTML=ocorrencias.map(x=>`<article class="border rounded-lg p-3"><b>${escapeHtml(x.tipo)}</b> · ${escapeHtml(x.carro)} · ${dataTexto(x.criadoEm)}<p>${escapeHtml(x.descricao)}</p><p class="small">Responsável: ${escapeHtml(x.autor)}</p></article>`).join('')||'Nenhuma ocorrência registrada.';}catch(e){aviso('Erro ao carregar histórico: '+e.message);}}
+async function carregarUsuarios(){const s=await getDocs(query(collection(db,'usuarios')));usuarios=s.docs.map(d=>({id:d.id,...d.data()}));$('usersList').innerHTML=usuarios.map(u=>`<div class="flex flex-wrap justify-between items-center border rounded-lg p-3 gap-2"><span><b>${escapeHtml(u.nome)}</b><small class="block">${escapeHtml(u.email||'')} · ${escapeHtml(u.tipo)} · ${u.ativo?'Ativo':'Inativo'}</small></span>${u.id!==auth.currentUser.uid?`<button class="btn2" data-user="${u.id}">${u.ativo?'Desativar':'Reativar'}</button>`:''}</div>`).join('');$('usersList').querySelectorAll('button[data-user]').forEach(b=>b.onclick=()=>alternarUsuario(b.dataset.user));}
+$('userForm').addEventListener('submit',async e=>{e.preventDefault();if(!admin())return;let secondaryApp;try{const {initializeApp}=await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');const {getAuth,createUserWithEmailAndPassword,signOut}=await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');secondaryApp=initializeApp(firebaseConfig,'secondary-'+Date.now());const secondaryAuth=getAuth(secondaryApp);const cred=await createUserWithEmailAndPassword(secondaryAuth,$('newEmail').value.trim(),$('newPass').value);await setDoc(doc(db,'usuarios',cred.user.uid),{nome:$('newName').value.trim(),email:$('newEmail').value.trim(),tipo:$('newRole').value,ativo:true,criadoEm:serverTimestamp()});await signOut(secondaryAuth);e.target.reset();await carregarUsuarios();aviso('Usuário criado. Ele já pode entrar com o e-mail e senha definidos.',true);}catch(err){aviso('Não foi possível criar o usuário/perfil: '+err.message+'. Se a conta foi criada mas o perfil falhou, confira Authentication e peça suporte antes de repetir.');}finally{if(secondaryApp){const {deleteApp}=await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');await deleteApp(secondaryApp).catch(()=>{});}}});
+async function alternarUsuario(id){const u=usuarios.find(x=>x.id===id);try{await updateDoc(doc(db,'usuarios',id),{ativo:!u.ativo});await carregarUsuarios();aviso('Acesso atualizado.',true);}catch(e){aviso('Não foi possível atualizar o usuário: '+e.message);}}
+window.relatorioWhatsApp=()=>{const phone=$('reportPhone').value.replace(/\D/g,'');if(!phone){aviso('Informe o WhatsApp com DDI e DDD.');return;}const now=new Date(),m=now.getMonth(),y=now.getFullYear();const noMes=x=>{const d=x.criadoEm?.toDate?x.criadoEm.toDate():null;return d&&d.getMonth()===m&&d.getFullYear()===y;};const c=checks.filter(noMes),o=ocorrencias.filter(noMes);const msg=`RELATÓRIO MENSAL - MULHERES HABILITADAS\nMês: ${String(m+1).padStart(2,'0')}/${y}\nVistorias: ${c.length}\nOcorrências: ${o.length}\nVeículos cadastrados: ${carros.filter(x=>x.ativo!==false).length}`;window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg),'_blank');};
+</script>
+</body></html>
